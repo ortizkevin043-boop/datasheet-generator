@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Datasheet Generator + IA (solo HTML)</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#0b0f14; --panel:#111823; --panel2:#0f1520;
+      --text:#e9eef7; --muted:#aab7cc; --border:rgba(255,255,255,.12);
+      --accent:#e2231a;
+      --paper:#fff; --ink:#111; --ink2:#444; --paperBorder:rgba(0,0,0,.10);
+      --logo-h:26px; --logo-max-w:170px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
+    .wrap{max-width:1320px;margin:0 auto;padding:16px}
+    .layout{display:grid;grid-template-columns:460px 1fr;gap:14px;align-items:start}
+    @media(max-width:1080px){.layout{grid-template-columns:1fr}}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px}
+    label{display:block;color:var(--muted);font-size:12px;margin:10px 0 6px}
+    select,input,textarea{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--border);
+      border-radius:10px;padding:10px;outline:none;font-size:14px}
+    textarea{min-height:74px;resize:vertical}
+    .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media(max-width:560px){.two{grid-template-columns:1fr}}
+    .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    button{border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text);
+      padding:10px 12px;border-radius:12px;cursor:pointer;font-weight:800;font-size:13px}
+    button.primary{background:linear-gradient(180deg, rgba(226,35,26,.95), rgba(226,35,26,.70));border-color:rgba(226,35,26,.25)}
+    button.good{background:linear-gradient(180deg, rgba(43,213,118,.85), rgba(43,213,118,.60));border-color:rgba(43,213,118,.25);color:#04140b}
+    button:disabled{opacity:.55;cursor:not-allowed}
+
+    .pill{display:flex;gap:8px;align-items:center;margin-top:10px;color:var(--muted);font-size:12px}
+    .dot{width:8px;height:8px;border-radius:50%;background:#ffcc66}
+    .dot.ok{background:#2bd576}
+    .err{color:#ffb4b4;font-size:12px;white-space:pre-wrap;margin-top:8px}
+
+    /* editor */
+    .fields{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+    .field-row{border:1px solid var(--border);background:rgba(255,255,255,.04);border-radius:12px;padding:10px}
+    .field-top{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .tag{font-size:11px;color:var(--muted);border:1px solid var(--border);background:rgba(255,255,255,.04);border-radius:999px;padding:4px 8px}
+    .field-actions button{padding:8px 10px;border-radius:10px}
+
+    /* preview */
+    .sheet{background:var(--paper);color:var(--ink);border-radius:14px;overflow:hidden;border:1px solid rgba(0,0,0,.12)}
+    .sheet-head{padding:14px 16px;border-bottom:1px solid var(--paperBorder);display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+    .brand{display:flex;gap:12px;align-items:flex-start}
+    .logo-img{height:var(--logo-h);width:auto;max-width:var(--logo-max-w);object-fit:contain;display:block;margin-top:2px}
+    .sheet-title{font-size:18px;font-weight:900;margin:0}
+    .sheet-meta{font-size:11.5px;color:var(--ink2);margin-top:4px}
+    .sheet-time{text-align:right;font-size:11px;color:var(--ink2)}
+    .sheet-body{padding:14px 16px 18px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:start}
+    @media(max-width:980px){.sheet-body{grid-template-columns:1fr}}
+    .sec{border:1px solid var(--paperBorder);border-radius:10px;padding:10px 10px 12px;background:#fff}
+    .sec h2{margin:0 0 8px;font-size:13px;font-weight:900;color:var(--accent);letter-spacing:.2px}
+    .kv{display:grid;grid-template-columns:1fr;gap:7px;font-size:12.3px}
+    .pair{display:grid;grid-template-columns:44% 56%;gap:10px;align-items:start}
+    .k{font-weight:800;color:#222}
+    .v{color:#111;white-space:pre-wrap}
+    .note{grid-column:1/-1;font-size:10.5px;color:#555;margin-top:2px}
+
+    @media print{
+      .no-print{display:none !important}
+      body{background:#fff !important}
+      .wrap{max-width:none;padding:0}
+      .sheet{border:none;border-radius:0}
+      .sheet-body{grid-template-columns:repeat(3,1fr);gap:10px}
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="layout">
+
+    <div class="card no-print">
+      <div class="two">
+        <div>
+          <label>Categoría</label>
+          <select id="category"></select>
+        </div>
+        <div>
+          <label>Serie / Form factor</label>
+          <select id="model"></select>
+        </div>
+      </div>
+
+      <label>Nombre del producto (opcional)</label>
+      <input id="productName" placeholder="Ej: ThinkCentre M90s Gen 4 / ThinkPad T14 Gen X"/>
+
+      <label>API Key (Anthropic / Claude)</label>
+      <input id="apiKey" placeholder="sk-ant-..." />
+
+      <div class="pill">
+        <span class="dot" id="dotLib"></span>
+        <span id="libState">XLSX: verificando…</span>
+      </div>
+
+      <label>Subir Excel LBP (.xlsx) (A=Characteristics, B=VALUES)</label>
+      <input type="file" id="excelFile" accept=".xlsx,.xls"/>
+
+      <div class="btns">
+        <button class="primary" id="btnLoadTemplate">Cargar plantilla</button>
+        <button class="good" id="btnAutoFill" disabled>Autollenar</button>
+        <button id="btnAI" disabled>IA: Mejorar texto</button>
+        <button id="btnPrint" disabled>Imprimir / PDF</button>
+      </div>
+
+      <div class="btns">
+        <button id="btnAddField" disabled>+ Añadir campo</button>
+        <button id="btnReset" disabled>Reset plantilla</button>
+      </div>
+
+      <div class="err" id="errBox"></div>
+      <div class="fields" id="fields"></div>
+    </div>
+
+    <div class="sheet" id="sheet">
+      <div class="sheet-head">
+        <div class="brand">
+          <img class="logo-img" id="logoImg" alt="Lenovo"/>
+          <div>
+            <p class="sheet-title" id="sheetTitle">—</p>
+            <div class="sheet-meta" id="sheetMeta">—</div>
+          </div>
+        </div>
+        <div class="sheet-time">
+          <div><b>Generated</b></div>
+          <div id="genTime">—</div>
+        </div>
+      </div>
+      <div class="sheet-body" id="sheetBody"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* =====================
+   PEGAR TU LOGO BASE64 AQUÍ
+   ===================== */
+const LOGO_DATA_URL = "data:image/png;base64,PEGA_AQUI_TU_BASE64";
+
+/* ===================== */
+const OPTIONS = {
+  ThinkPad: ["E","L","T","X","X1","P","Z","Yoga","11e","C"],
+  WKS: ["Tiny","SFF","Tower"],
+  Desktop: ["Tiny","SFF","Tower","AIO"]
+};
+
+const SECTION_ORDER = [
+  "Rendimiento",
+  "Diseño",
+  "Conectividad",
+  "Seguridad y privacidad",
+  "Ambiental"
+];
+
+function baseTemplate(category, model){
+  const title = (category==="ThinkPad") ? `ThinkPad ${model} Series`
+    : (category==="Desktop") ? `Desktop ${model}` : `Workstation ${model}`;
+
+  const tpl = { title, meta:"Datasheet HTML — editable + autollenado LBP + IA", sections:{} };
+  SECTION_ORDER.forEach(sec => tpl.sections[sec]=[]);
+
+  pushField(tpl,"Rendimiento","procesador","Procesador","");
+  pushField(tpl,"Rendimiento","sistema_operativo","Sistema operativo","");
+  pushField(tpl,"Rendimiento","graficos","Gráficos","");
+  pushField(tpl,"Rendimiento","memoria","Memoria","");
+  pushField(tpl,"Rendimiento","almacenamiento","Almacenamiento","");
+
+  if(category!=="ThinkPad"){
+    pushField(tpl,"Rendimiento","unidad_optica","Unidad óptica","");
+    pushField(tpl,"Diseño","fuente_poder","Fuente de poder (W)","");
+  }
+
+  pushField(tpl,"Diseño","plataforma","Plataforma / Form factor","");
+  pushField(tpl,"Diseño","color","Color","");
+
+  pushField(tpl,"Conectividad","wifi_bt","Wi-Fi","");
+
+  pushField(tpl,"Seguridad y privacidad","intrusion","Chassis Intrusion Switch","");
+
+  pushField(tpl,"Ambiental","garantia","Garantía","");
+  return tpl;
+}
+function pushField(tpl, section, key, label, value){
+  tpl.sections[section].push({key, label, value});
+}
+
+/* ===== State ===== */
+const els = {
+  category: qs("#category"),
+  model: qs("#model"),
+  productName: qs("#productName"),
+  apiKey: qs("#apiKey"),
+  excelFile: qs("#excelFile"),
+  btnLoadTemplate: qs("#btnLoadTemplate"),
+  btnAutoFill: qs("#btnAutoFill"),
+  btnAI: qs("#btnAI"),
+  btnPrint: qs("#btnPrint"),
+  btnAddField: qs("#btnAddField"),
+  btnReset: qs("#btnReset"),
+  fields: qs("#fields"),
+  errBox: qs("#errBox"),
+  dotLib: qs("#dotLib"),
+  libState: qs("#libState"),
+  logoImg: qs("#logoImg"),
+  sheetTitle: qs("#sheetTitle"),
+  sheetMeta: qs("#sheetMeta"),
+  sheetBody: qs("#sheetBody"),
+  genTime: qs("#genTime")
+};
+
+let currentTemplate=null;
+let baseTemplateCopy=null;
+let excelKV={};
+
+init();
+
+/* ===== init ===== */
+function init(){
+  els.logoImg.src = LOGO_DATA_URL;
+
+  els.category.innerHTML="";
+  Object.keys(OPTIONS).forEach(c=>{
+    const o=document.createElement("option"); o.value=c; o.textContent=c; els.category.appendChild(o);
+  });
+  els.category.addEventListener("change", syncModels);
+  syncModels();
+
+  const xlsxOk = (typeof XLSX !== "undefined");
+  setPill(els.dotLib, els.libState, xlsxOk, xlsxOk ? "XLSX: OK" : "XLSX: NO cargó (CDN bloqueado/sin internet)");
+  updateTime();
+
+  els.btnLoadTemplate.addEventListener("click", onLoadTemplate);
+  els.btnReset.addEventListener("click", onReset);
+  els.btnAddField.addEventListener("click", ()=>addFieldPrompt());
+  els.btnAutoFill.addEventListener("click", onAutoFill);
+  els.btnAI.addEventListener("click", onAI);
+  els.btnPrint.addEventListener("click", ()=>window.print());
+
+  els.excelFile.addEventListener("change", onExcel);
+}
+
+function syncModels(){
+  const list=OPTIONS[els.category.value]||[];
+  els.model.innerHTML="";
+  list.forEach(m=>{
+    const o=document.createElement("option"); o.value=m; o.textContent=m; els.model.appendChild(o);
+  });
+}
+
+function onLoadTemplate(){
+  const cat=els.category.value, model=els.model.value;
+  currentTemplate = deepCopy(baseTemplate(cat, model));
+  baseTemplateCopy = deepCopy(currentTemplate);
+
+  const pn=(els.productName.value||"").trim();
+  if(pn) currentTemplate.title = pn;
+
+  enableButtons(true);
+  renderEditor(); renderSheet();
+  clearErr();
+}
+
+function onReset(){
+  if(!baseTemplateCopy) return;
+  currentTemplate = deepCopy(baseTemplateCopy);
+  renderEditor(); renderSheet();
+}
+
+function enableButtons(ok){
+  els.btnAutoFill.disabled = !ok;
+  els.btnAI.disabled = !ok;
+  els.btnPrint.disabled = !ok;
+  els.btnAddField.disabled = !ok;
+  els.btnReset.disabled = !ok;
+}
+
+async function onExcel(e){
+  clearErr();
+  const file=e.target.files?.[0];
+  if(!file) return;
+  if(typeof XLSX==="undefined"){
+    showErr("No se cargó XLSX (CDN). Abre con internet o usa otro navegador/red.");
+    return;
+  }
+  try{
+    excelKV = await readLbpExcel_AB(file);
+    console.log("LBP keys:", Object.keys(excelKV).slice(0,40));
+  }catch(err){
+    console.error(err);
+    showErr("Error leyendo Excel: "+String(err));
+  }
+}
+
+async function readLbpExcel_AB(file){
+  const data=await file.arrayBuffer();
+  const wb=XLSX.read(data,{type:"array"});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:""});
+
+  // encontrar header exacto A/B
+  let start=0;
+  for(let r=0;r<rows.length;r++){
+    const a=String(rows[r]?.[0]??"").trim().toLowerCase();
+    const b=String(rows[r]?.[1]??"").trim().toLowerCase();
+    if(a==="characteristics" && b==="values"){ start=r+1; break; }
+  }
+
+  const kv={};
+  for(let r=start;r<rows.length;r++){
+    const kRaw=String(rows[r]?.[0]??"").trim();
+    const vRaw=String(rows[r]?.[1]??"").trim();
+    if(!kRaw || !vRaw) continue;
+    const k=canonicalize(normalizeKey(kRaw));
+    kv[k]=vRaw;
+  }
+  return kv;
+}
+
+function canonicalize(k){
+  const a={
+    "wirelesslan":"wireless_lan",
+    "preloados":"preload_os",
+    "dimmemory":"dimm_memory",
+    "opticaldrive":"optical_drive",
+    "storageselection":"storage_selection",
+    "secondstorageselection":"second_storage_selection",
+    "thirdstorageselection":"third_storage_selection",
+    "fourthstorageselection":"fourth_storage_selection"
+  };
+  return a[k]||k;
+}
+
+function onAutoFill(){
+  if(!currentTemplate){ showErr("Primero: Cargar plantilla."); return; }
+  if(!Object.keys(excelKV).length){ showErr("Primero: cargar Excel LBP."); return; }
+  applyAutoFill();
+  renderEditor(); renderSheet();
+  clearErr();
+}
+
+function applyAutoFill(){
+  const get=(k)=> (excelKV[k]??"").trim();
+  const bad=(s)=>/^(none|no storage selection|no storage|not included)$/i.test((s||"").trim());
+
+  const procesador=get("processor");
+  const so=get("preload_os");
+  const graficos=get("graphics");
+  const memoria=get("dimm_memory");
+  const optical=get("optical_drive");
+  const wifi=get("wireless_lan");
+  const platform=get("platform");
+
+  const stor=[get("storage_selection"),get("second_storage_selection"),get("third_storage_selection"),get("fourth_storage_selection")]
+    .filter(v=>v && !bad(v));
+  const almacenamiento=stor.length?stor.join("\n"):"";
+
+  let watts="";
+  const m=platform.match(/(\d{2,4})\s*w\b/i);
+  if(m) watts=`${m[1]}W`;
+
+  const internal={
+    procesador,
+    sistema_operativo:so,
+    graficos,
+    memoria,
+    almacenamiento,
+    unidad_optica:optical,
+    wifi_bt:wifi,
+    plataforma:platform,
+    fuente_poder:watts
+  };
+
+  SECTION_ORDER.forEach(sec=>{
+    (currentTemplate.sections[sec]||[]).forEach(f=>{
+      const v=internal[f.key];
+      if(v && String(v).trim()!=="") f.value=v;
+    });
+  });
+}
+
+/* ===== IA (Claude) ===== */
+async function onAI(){
+  clearErr();
+  const key=(els.apiKey.value||"").trim();
+  if(!key){ showErr("Pega tu API key (Anthropic) arriba."); return; }
+  if(!currentTemplate){ showErr("Primero: Cargar plantilla."); return; }
+
+  // arma prompt simple: mejorar wording de valores sin inventar specs
+  const payload = {
+    model: "claude-3-5-sonnet-20241022",
+    max_tokens: 900,
+    temperature: 0.2,
+    messages: [{
+      role: "user",
+      content:
+`Eres un asistente técnico. Reescribe en español neutro y formato datasheet (sin inventar).
+Devuelve SOLO JSON con la misma estructura:
+{ "updates": [ { "key": "memoria", "value": "..." }, ... ] }
+
+Campos actuales:\n${JSON.stringify(flatFields(currentTemplate), null, 2)}`
+    }]
+  };
+
+  try{
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{
+        "content-type":"application/json",
+        "x-api-key": key,
+        "anthropic-version":"2023-06-01",
+        // Esto ayuda a algunos entornos, pero igual puede fallar en file://
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    const text = (data?.content||[])
+      .map(b=> b?.type==="text" ? b.text : "")
+      .join("\n");
+
+    // extrae JSON del texto
+    const jsonStr = extractJson(text);
+    const obj = JSON.parse(jsonStr);
+
+    if(!obj?.updates?.length){ showErr("IA no devolvió updates."); return; }
+
+    // aplicar
+    const map = new Map(obj.updates.map(u=>[normalizeKey(u.key), String(u.value||"")]));
+    SECTION_ORDER.forEach(sec=>{
+      (currentTemplate.sections[sec]||[]).forEach(f=>{
+        const v = map.get(normalizeKey(f.key));
+        if(v != null && v.trim()!=="") f.value = v;
+      });
+    });
+
+    renderEditor(); renderSheet();
+  }catch(err){
+    showErr("Error IA: "+String(err) +
+      "\n\nTIP: Si lo abriste como file://, súbelo a GitHub Pages/Drive o ábrelo desde un link http(s).");
+  }
+}
+
+function extractJson(t){
+  // intenta encontrar el primer bloque {...}
+  const m = t.match(/\{[\s\S]*\}/);
+  if(!m) throw new Error("No encontré JSON en la respuesta.");
+  return m[0];
+}
+
+/* ===== Editor render (agregar/borrar) ===== */
+function renderEditor(){
+  els.fields.innerHTML="";
+  if(!currentTemplate) return;
+
+  const top = div("field-row");
+  top.innerHTML = `
+    <div class="two">
+      <div><label>Título</label><input id="tplTitle" value="${esc(currentTemplate.title)}"></div>
+      <div><label>Meta</label><input id="tplMeta" value="${esc(currentTemplate.meta)}"></div>
+    </div>`;
+  els.fields.appendChild(top);
+
+  qs("#tplTitle", top).addEventListener("input", e=>{ currentTemplate.title=e.target.value; renderSheet(); });
+  qs("#tplMeta", top).addEventListener("input", e=>{ currentTemplate.meta=e.target.value; renderSheet(); });
+
+  SECTION_ORDER.forEach(sec=>{
+    const block = div("field-row");
+    block.innerHTML = `
+      <div class="field-top">
+        <div><b>${sec}</b> <span class="tag">${(currentTemplate.sections[sec]||[]).length} campos</span></div>
+        <div class="field-actions"><button data-add="${sec}">+ Campo</button></div>
+      </div>
+      <div class="fields" id="sec_${normalizeKey(sec)}"></div>`;
+    els.fields.appendChild(block);
+
+    qs(`[data-add="${sec}"]`, block).addEventListener("click", ()=>addFieldPrompt(sec));
+    const list = qs(`#sec_${normalizeKey(sec)}`, block);
+
+    (currentTemplate.sections[sec]||[]).forEach((f, idx)=>{
+      list.appendChild(renderFieldRow(sec, idx, f));
+    });
+  });
+}
+
+function renderFieldRow(section, idx, f){
+  const row = div("field-row");
+  row.innerHTML = `
+    <div class="field-top">
+      <div class="tag">${section}</div>
+      <div class="field-actions"><button data-del="1">Eliminar</button></div>
+    </div>
+    <div class="two">
+      <div><label>Label</label><input data-kind="label" value="${esc(f.label)}"></div>
+      <div><label>Key</label><input data-kind="key" value="${esc(f.key)}"></div>
+    </div>
+    <label>Valor</label>
+    <textarea data-kind="value">${esc(f.value||"")}</textarea>`;
+
+  qs(`[data-kind="label"]`, row).addEventListener("input", e=>{ currentTemplate.sections[section][idx].label=e.target.value; renderSheet(); });
+  qs(`[data-kind="key"]`, row).addEventListener("input", e=>{ currentTemplate.sections[section][idx].key=normalizeKey(e.target.value); renderSheet(); });
+  qs(`[data-kind="value"]`, row).addEventListener("input", e=>{ currentTemplate.sections[section][idx].value=e.target.value; renderSheet(); });
+
+  qs(`[data-del="1"]`, row).addEventListener("click", ()=>{
+    currentTemplate.sections[section].splice(idx,1);
+    renderEditor(); renderSheet();
+  });
+
+  return row;
+}
+
+function addFieldPrompt(forceSection){
+  if(!currentTemplate) return;
+  const sec = forceSection || prompt(`Sección:\n${SECTION_ORDER.join(" | ")}`, "Rendimiento");
+  if(!sec || !currentTemplate.sections[sec]) return;
+  const label = prompt("Label (ES)", "Nuevo campo"); if(!label) return;
+  const keyRaw = prompt("Key interna", normalizeKey(label)); if(!keyRaw) return;
+  const k = normalizeKey(keyRaw);
+  if(flatFields(currentTemplate).some(x=>normalizeKey(x.key)===k)) { showErr("Esa key ya existe."); return; }
+  currentTemplate.sections[sec].push({key:k,label,value:""});
+  renderEditor(); renderSheet();
+}
+
+/* ===== Preview render ===== */
+function renderSheet(){
+  if(!currentTemplate){
+    els.sheetTitle.textContent="—"; els.sheetMeta.textContent="—"; els.sheetBody.innerHTML=""; return;
+  }
+  els.sheetTitle.textContent = currentTemplate.title || "Datasheet";
+  els.sheetMeta.textContent  = currentTemplate.meta  || "";
+  updateTime();
+
+  const frag=document.createDocumentFragment();
+
+  SECTION_ORDER.forEach(sec=>{
+    const fields=currentTemplate.sections[sec]||[];
+    if(!fields.length) return;
+    const secEl=div("sec");
+    secEl.innerHTML=`<h2>${sec}</h2>`;
+    const kv=div("kv");
+    fields.forEach(f=>{
+      if(!String(f.label||"").trim()) return;
+      const pair=div("pair");
+      const k=div("k"); k.textContent=f.label;
+      const v=div("v"); v.textContent=f.value ?? "";
+      pair.appendChild(k); pair.appendChild(v);
+      kv.appendChild(pair);
+    });
+    secEl.appendChild(kv);
+    frag.appendChild(secEl);
+  });
+
+  const note=div("note"); note.textContent="Autollenado desde LBP + edición manual. Specs pueden variar según configuración.";
+  frag.appendChild(note);
+
+  els.sheetBody.innerHTML="";
+  els.sheetBody.appendChild(frag);
+}
+
+/* ===== helpers ===== */
+function qs(sel,root=document){ return root.querySelector(sel); }
+function div(cls){ const d=document.createElement("div"); d.className=cls; return d; }
+function setPill(dot, textEl, ok, text){ dot.classList.toggle("ok",!!ok); textEl.textContent=text; }
+function showErr(t){ els.errBox.textContent=t; }
+function clearErr(){ els.errBox.textContent=""; }
+function normalizeKey(s){ return String(s??"").toLowerCase().trim().replace(/\s+/g," ").replace(/[^\w\s\-]/g,"").replace(/\s/g,"_"); }
+function deepCopy(o){ return JSON.parse(JSON.stringify(o)); }
+function esc(s){ return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;"); }
+function updateTime(){ els.genTime.textContent=new Date().toLocaleString(); }
+function flatFields(tpl){
+  const out=[];
+  SECTION_ORDER.forEach(sec=> (tpl.sections[sec]||[]).forEach(f=> out.push({section:sec, key:f.key, label:f.label, value:f.value})));
+  return out;
+}
+</script>
+</body>
+</html>
+</script>
+</body>
+</html>
